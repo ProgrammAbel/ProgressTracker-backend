@@ -40,7 +40,7 @@ class API:
     
     def get_name(self, id, query):
         try:
-            result = self.db.execute_query(query, (str(id)))
+            result = self.db.execute_query(query, (id))
             return {'name': result[0][0]}, 200
         except Exception as e:
             return {'error': str(e)}, 500
@@ -64,7 +64,11 @@ class TopicsAPI(API):
 
     def get_topics(self, subject_id):
         query = "SELECT TopicID, TopicName FROM Topics WHERE SubjectID=?"
-        result = self.db.execute_query(query, (subject_id))
+        try:
+            result = self.db.execute_query(query, (subject_id))
+            return {'topics': result}, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
 
 class UsersAPI(API):
     # def get_all_users(self):
@@ -151,9 +155,13 @@ def get_subject_name(subject_id: int):
 def get_all_subjects():
     return subjects_api.get_all_subjects()
 
-@app.route('/get_topic_name/<int:subject_id>', methods=['GET'])
-def get_topic_name(subject_id: int):
+@app.route('/get_topic_name/<subject_id>', methods=['GET'])
+def get_topic_name(subject_id):
     return topics_api.get_name(subject_id)
+
+@app.route('/get_topics/<subject_id>', methods=['GET'])
+def get_topics(subject_id):
+    return topics_api.get_topics(subject_id)
 
 @app.route('/create_user', methods=['POST'])
 def create_user():
