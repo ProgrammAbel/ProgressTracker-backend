@@ -113,20 +113,20 @@ class UsersAPI(API):
         
 
 class UserSubjectsAPI(API):
-    def create_user_subject(self, user_id: int, subject_ids: tuple):
+    def create_user_subject(self, user_id: str, subject_ids: list):
         query = """
-            INSERT INTO User_Subjects (UserID, SubjectID, ConfidenceLevel, DateLastReviewed, SubjectCompleted)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO User_Subjects (UserID, SubjectID)
+            VALUES (?, ?)
         """
-        params = (data['UserID'], data['SubjectID'], data['ConfidenceLevel'], data['DateLastReviewed'], data['SubjectCompleted'])
-        try:
-            self.db.execute_query(query, params)
-            return {'message': 'User_Subject created successfully'}, 201
-        except Exception as e:
-            return {'error': str(e)}, 500
+        for subject_id in subject_ids:
+            try:
+                self.db.execute_query(query, (user_id, subject_id))
+            except Exception as e:
+                return {'error': str(e)}, 500
+        return {'message': 'User_Subject created successfully'}, 201
 
     def get_user_subjects(self, user_id):
-        query = "SELECT * FROM User_Subjects WHERE UserID = ?"
+        query = "SELECT SubjectID FROM User_Subjects WHERE UserID = ?"
         result = self.db.execute_query(query, (user_id,))
         if not result:
             return {'error': 'User not found'}, 404
@@ -177,12 +177,23 @@ def login():
         return jsonify({'error': 'No data provided'}), 400
     return users_api.login(data['username'], data['password'])
 
-# @app.route('/user_subjects', methods=['POST'])
-# def create_user_subject():
-#     data = request.json
-#     if not data:
-#         return jsonify({'error': 'No data provided'}), 400
-#     return user_subjects_api.create_user_subject(data)
+@app.route('/create_user_subject', methods=['POST'])
+def create_user_subject():
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    print(data)
+    return user_subjects_api.create_user_subject(data['user_id'], data['subject_ids'])
+
+@app.route('/get_user_subjects/<user_id>', methods=['GET'])
+def get_user_subjects(user_id):
+    subject_ids, response = user_subjects_api.get_user_subjects(user_id)
+    print(subject_ids)
+    subjects = []
+    for i in subject_ids['data']:
+        subjects.append(i[0])
+    
+    return {'subjects': subjects}, 200
 
 # @app.route('/user_subjects/<int:user_id>', methods=['GET'])
 # def get_user_subjects(user_id):
