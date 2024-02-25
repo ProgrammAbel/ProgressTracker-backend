@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 import sqlite3
 from pathlib import Path
 from create_database import setup_database
@@ -35,10 +36,10 @@ class API:
     def __init__(self, db: Database):
         self.db: Database = db
     
-    def get_name(self, id):
+    def get_name(self, id, query):
         try:
-            result = self.db.execute_query(query, (id))
-            return {'name': result}, 200
+            result = self.db.execute_query(query, (str(id)))
+            return {'name': result[0][0]}, 200
         except Exception as e:
             return {'error': str(e)}, 500
 
@@ -46,7 +47,7 @@ class SubjectsAPI(API):
     def get_name(self, id):
         query = "SELECT SubjectName FROM Subjects WHERE SubjectID=?"
 
-        super().get_name(id)
+        return super().get_name(id, query)
 
     def get_all_subjects(self):
         query = "SELECT * FROM Subjects"
@@ -57,7 +58,7 @@ class TopicsAPI(API):
     def get_name(self, id):
         query = "SELECT TopicName FROM Topics WHERE TopicID=?"
 
-        super().get_name(id)
+        return super().get_name(id, query)
 
     def get_topics(self, subject_id):
         query = "SELECT TopicID, TopicName FROM Topics WHERE SubjectID=?"
@@ -89,6 +90,11 @@ class UsersAPI(API):
             return {'error': str(e)}, 500
 
     def authenticate(self, username: str, password: str):
+        # query = """
+        #     SELECT User
+        # """
+        # try:
+        #     self.
         pass
         
 
@@ -127,7 +133,11 @@ topics_api = TopicsAPI(db)
 user_subjects_api = UserSubjectsAPI(db)
 user_topic_progress_api = UserTopicProgress(db)
 
-@app.route('/subjects', methods=['GET'])
+@app.route('/get_subject_name/<int:subject_id>', methods=['GET'])
+def get_subject_name(subject_id: int):
+    return subjects_api.get_name(subject_id)
+
+@app.route('/get_all_subjects', methods=['GET'])
 def get_all_subjects():
     return subjects_api.get_all_subjects()
 
@@ -138,16 +148,16 @@ def create_user():
         return jsonify({'error': 'No data provided'}), 400
     return users_api.create_user(data['username'], data['password'])
 
-@app.route('/user_subjects', methods=['POST'])
-def create_user_subject():
-    data = request.json
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-    return user_subjects_api.create_user_subject(data)
+# @app.route('/user_subjects', methods=['POST'])
+# def create_user_subject():
+#     data = request.json
+#     if not data:
+#         return jsonify({'error': 'No data provided'}), 400
+#     return user_subjects_api.create_user_subject(data)
 
-@app.route('/user_subjects/<int:user_id>', methods=['GET'])
-def get_user_subjects(user_id):
-    return user_subjects_api.get_user_subjects(user_id)
+# @app.route('/user_subjects/<int:user_id>', methods=['GET'])
+# def get_user_subjects(user_id):
+#     return user_subjects_api.get_user_subjects(user_id)
 
 if __name__ == '__main__':
     app.run(debug=True)
