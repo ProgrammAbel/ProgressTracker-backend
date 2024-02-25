@@ -3,10 +3,12 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 import sqlite3
 from pathlib import Path
 from create_database import setup_database
-import os
+import secrets
 import hashlib
 
 app = Flask(__name__)
+app.config["JWT_SECRET_KEY"] = secrets.token_hex(32)
+jwt = JWTManager(app)
 
 class Database:
     DB_NAME = 'progress_tracker.db'
@@ -71,7 +73,7 @@ class UsersAPI(API):
     #     return {'data': result}, 200
 
     def __generate_salt(self):
-        return os.urandom(16).hex()
+        return secrets.token_hex(16)
 
     def __hash_password(self, password: str, salt: str):
         return hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000).hex()
@@ -89,13 +91,21 @@ class UsersAPI(API):
         except Exception as e:
             return {'error': str(e)}, 500
 
-    def authenticate(self, username: str, password: str):
-        # query = """
-        #     SELECT User
-        # """
-        # try:
-        #     self.
-        pass
+    def login(self, username: str, password: str):
+        query = "SELECT PasswordHash, Salt FROM Users WHERE Username=?"
+        try:
+            result = self.db.execute_query(query, (username,))
+            real_password_hash = result[0][0]
+            salt = result[0][1]
+        except Exception as e:
+            return {'error': str(e)}, 500
+        
+        password_hash = self.__hash_password(password, salt)
+        if password_hash == real_password_hash:
+            access_token = create_access_token(identity=username)
+            return jsonify(access_token=access_token)
+        else:
+            return {'message': 'Invalid username or password'}, 401
         
 
 class UserSubjectsAPI(API):
@@ -141,12 +151,23 @@ def get_subject_name(subject_id: int):
 def get_all_subjects():
     return subjects_api.get_all_subjects()
 
+@app.route('/get_topic_name/<int:subject_id>', methods=['GET'])
+def get_topic_name(subject_id: int):
+    return topics_api.get_name(subject_id)
+
 @app.route('/create_user', methods=['POST'])
 def create_user():
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     return users_api.create_user(data['username'], data['password'])
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    return users_api.login(data['username'], data['password'])
 
 # @app.route('/user_subjects', methods=['POST'])
 # def create_user_subject():
