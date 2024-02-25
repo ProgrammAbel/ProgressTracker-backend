@@ -5,6 +5,7 @@ from pathlib import Path
 from create_database import setup_database
 import secrets
 import hashlib
+from datetime import datetime
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = secrets.token_hex(32)
@@ -132,12 +133,67 @@ class UserSubjectsAPI(API):
             return {'error': 'User not found'}, 404
         return {'data': result}, 200
 
-class UserTopicProgress(API):
-    def add_topic_progress(self, user_id: int, subject_id: int, topics: dict):
-        pass
+class UserTopicProgressAPI(API):
+    def __merge_sort(self, arr: list) -> list:
+        if len(arr) > 1:
+            # Split the array into two halves
+            mid = len(arr) // 2
+            left_half = arr[:mid]
+            right_half = arr[mid:]
+
+            # Recursively sort each half
+            self.__merge_sort(left_half)
+            self.__merge_sort(right_half)
+
+            # Merge the sorted halves
+            i = j = k = 0
+            while i < len(left_half) and j < len(right_half):
+                left_date = datetime.strptime(left_half[i][1], '%Y-%m-%d')
+                right_date = datetime.strptime(right_half[j][1], '%Y-%m-%d')
+                if left_date < right_date:
+                    arr[k] = left_half[i]
+                    i += 1
+                else:
+                    arr[k] = right_half[j]
+                    j += 1
+                k += 1
+
+            # Check for any remaining elements in left_half and right_half
+            while i < len(left_half):
+                arr[k] = left_half[i]
+                i += 1
+                k += 1
+            while j < len(right_half):
+                arr[k] = right_half[j]
+                j += 1
+                k += 1
+
+    def add_topic_progress(self, user_id: str, subject_id: str, topic_id: str,
+                           topic_completed: bool, confidence_level: str,
+                           last_reviewed: str):
+        query = """
+            INSERT INTO User_Topic_Progress
+            VALUES (?, ?, ?, ?, ?, ?)
+        """
+        params = (user_id, topic_id, subject_id, topic_completed,
+                  confidence_level, last_reviewed)
+        
+        self.db.execute_query(query, params)
+        return {'message': 'User topic progress added successfully'}, 201
 
     def get_ordered_list(self, user_id: int, subject_id: int):
-        pass
+        final_result = []
+        for confidence_level in ['low', 'medium', 'high']:
+            query = """
+                SELECT TopicID, LastReviewed FROM User_Topic_Progress
+                WHERE ConfidenceLevel=?
+            """
+            result = self.db.execute_query(query, (confidence_level,))
+            self.__merge_sort(result)
+            final_result.extend(result)
+        return {'data': final_result}, 200
+
+
 
 
 db = Database()
@@ -145,7 +201,7 @@ subjects_api = SubjectsAPI(db)
 users_api = UsersAPI(db)
 topics_api = TopicsAPI(db)
 user_subjects_api = UserSubjectsAPI(db)
-user_topic_progress_api = UserTopicProgress(db)
+user_topic_progress_api = UserTopicProgressAPI(db)
 
 @app.route('/get_subject_name/<int:subject_id>', methods=['GET'])
 def get_subject_name(subject_id: int):
@@ -188,12 +244,28 @@ def create_user_subject():
 @app.route('/get_user_subjects/<user_id>', methods=['GET'])
 def get_user_subjects(user_id):
     subject_ids, response = user_subjects_api.get_user_subjects(user_id)
-    print(subject_ids)
     subjects = []
     for i in subject_ids['data']:
         subjects.append(i[0])
     
     return {'subjects': subjects}, 200
+
+@app.route('/add_topic_progress', methods=['POST'])
+def add_topic_progress():
+    data = request.json
+    try:
+        for topic in data['topics']:
+            user_topic_progress_api.add_topic_progress(
+                data['user_id'], data['subject_id'], topic['topic_id'],
+                topic['topic_completed'], topic['confidence_level'],
+                topic['last_reviewed'])
+        return {'message': 'Topic progress added successfully'}, 201
+    except Exception as e:
+            return {'error': str(e)}, 500
+        
+@app.route('/get_ordered_list/<user_id>/<subject_id>', methods=['GET'])
+def get_ordered_list(user_id, subject_id):
+    return user_topic_progress_api.get_ordered_list(user_id, subject_id)
 
 # @app.route('/user_subjects/<int:user_id>', methods=['GET'])
 # def get_user_subjects(user_id):
