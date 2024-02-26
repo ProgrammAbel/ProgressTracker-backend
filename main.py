@@ -88,6 +88,11 @@ class UsersAPI(API):
     def __hash_password(self, password: str, salt: str):
         return hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000).hex()
 
+    def get_user_id(self, username: str) -> int:
+        query = """SELECT UserID FROM Users WHERE Username=?"""
+        result = self.db.execute_query(query, (username,))
+        return result[0][0]
+
     def create_user(self, username: str, password: str):
         salt = self.__generate_salt()
         password_hash = self.__hash_password(password, salt)
@@ -190,14 +195,23 @@ class UserTopicProgressAPI(API):
         final_result = []
         for confidence_level in ['low', 'medium', 'high']:
             query = """
-                SELECT TopicID, LastReviewed FROM User_Topic_Progress
-                WHERE ConfidenceLevel=?
+                SELECT TopicID, LastReviewed, ConfidenceLevel
+                FROM User_Topic_Progress
+                WHERE UserID=? AND SubjectID=? AND ConfidenceLevel=?
             """
-            result = self.db.execute_query(query, (confidence_level,))
+            result = self.db.execute_query(query, (str(user_id), str(subject_id), confidence_level,))
             self.__merge_sort(result)
             final_result.extend(result)
         return {'data': final_result}, 200
 
+    def get_ordered_list(self, user_id: int, subject_id: int):
+        query = """
+            SELECT TopicID, LastReviewed, ConfidenceLevel FROM User_Topic_Progress
+            WHERE UserID=? AND SubjectID=?
+        """
+        result = self.db.execute_query(query, (str(user_id),str(subject_id),))
+        return {'data': result}, 200
+    
 
 
 
@@ -244,12 +258,13 @@ def create_user_subject():
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    print(data)
-    return user_subjects_api.create_user_subject(data['user_id'], data['subject_ids'])
+    user_id = users_api.get_user_id(get_jwt_identity())
+    return user_subjects_api.create_user_subject(user_id, data['subject_ids'])
 
-@app.route('/get_user_subjects/<user_id>', methods=['GET'])
+@app.route('/get_user_subjects', methods=['GET'])
 @jwt_required()
-def get_user_subjects(user_id):
+def get_user_subjects():
+    user_id = users_api.get_user_id(get_jwt_identity())
     subject_ids, response = user_subjects_api.get_user_subjects(user_id)
     subjects = []
     for i in subject_ids['data']:
@@ -261,20 +276,28 @@ def get_user_subjects(user_id):
 @jwt_required()
 def add_topic_progress():
     data = request.json
+    user_id = users_api.get_user_id(get_jwt_identity())
     try:
         for topic in data['topics']:
             user_topic_progress_api.add_topic_progress(
-                data['user_id'], data['subject_id'], topic['topic_id'],
+                user_id, data['subject_id'], topic['topic_id'],
                 topic['topic_completed'], topic['confidence_level'],
                 topic['last_reviewed'])
         return {'message': 'Topic progress added successfully'}, 201
     except Exception as e:
             return {'error': str(e)}, 500
         
-@app.route('/get_priority_list/<user_id>/<subject_id>', methods=['GET'])
+@app.route('/get_priority_list/<subject_id>', methods=['GET'])
 @jwt_required()
-def get_priority_list(user_id, subject_id):
+def get_priority_list(subject_id):
+    user_id = users_api.get_user_id(get_jwt_identity())
     return user_topic_progress_api.get_priority_list(user_id, subject_id)
+
+@app.route('/get_ordered_list/<subject_id>', methods=['GET'])
+@jwt_required()
+def get_ordered_list(subject_id):
+    user_id = users_api.get_user_id(get_jwt_identity())
+    return user_topic_progress_api.get_ordered_list(user_id, subject_id)
 
 # @app.route('/user_subjects/<int:user_id>', methods=['GET'])
 # def get_user_subjects(user_id):

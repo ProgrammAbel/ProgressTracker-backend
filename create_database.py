@@ -340,7 +340,7 @@ def setup_database():
         ]
     }
 
-    subject_id = 0
+    subject_id = 1
     for subject, topic_list in SUBJECTS.items():
         cursor.execute(
             """
@@ -356,7 +356,7 @@ def setup_database():
                 INSERT INTO Topics (TopicID, SubjectID, TopicName)
                 VALUES (?, ?, ?)
                 """,
-                (topic_id, subject_id, topic)
+                (topic_id + 1, subject_id, topic)
             )
         
         subject_id += 1
