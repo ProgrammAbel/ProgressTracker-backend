@@ -41,7 +41,7 @@ class API:
     
     def get_name(self, id, query):
         try:
-            result = self.db.execute_query(query, (id))
+            result = self.db.execute_query(query, (str(id)))
             return {'name': result[0][0]}, 200
         except Exception as e:
             return {'error': str(e)}, 500
@@ -58,15 +58,20 @@ class SubjectsAPI(API):
         return {'subjects': result}, 200
 
 class TopicsAPI(API):
-    def get_name(self, id):
-        query = "SELECT TopicName FROM Topics WHERE TopicID=?"
+    def get_name(self, subject_id, topic_id):
+        query = "SELECT TopicName FROM Topics WHERE SubjectID=? AND TopicID=?"
+        params = (str(subject_id), str(topic_id),)
 
-        return super().get_name(id, query)
+        try:
+            result = self.db.execute_query(query, params)
+            return {'name': result[0][0]}, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
 
-    def get_topics(self, subject_id):
+    def get_topics(self, subject_id: int):
         query = "SELECT TopicID, TopicName FROM Topics WHERE SubjectID=?"
         try:
-            result = self.db.execute_query(query, (subject_id))
+            result = self.db.execute_query(query, (str(subject_id)))
             return {'topics': result}, 200
         except Exception as e:
             return {'error': str(e)}, 500
@@ -181,7 +186,7 @@ class UserTopicProgressAPI(API):
         self.db.execute_query(query, params)
         return {'message': 'User topic progress added successfully'}, 201
 
-    def get_ordered_list(self, user_id: int, subject_id: int):
+    def get_priority_list(self, user_id: int, subject_id: int):
         final_result = []
         for confidence_level in ['low', 'medium', 'high']:
             query = """
@@ -211,11 +216,11 @@ def get_subject_name(subject_id: int):
 def get_all_subjects():
     return subjects_api.get_all_subjects()
 
-@app.route('/get_topic_name/<subject_id>', methods=['GET'])
-def get_topic_name(subject_id):
-    return topics_api.get_name(subject_id)
+@app.route('/get_topic_name/<int:subject_id>/<int:topic_id>', methods=['GET'])
+def get_topic_name(subject_id, topic_id):
+    return topics_api.get_name(subject_id, topic_id)
 
-@app.route('/get_topics/<subject_id>', methods=['GET'])
+@app.route('/get_topics/<int:subject_id>', methods=['GET'])
 def get_topics(subject_id):
     return topics_api.get_topics(subject_id)
 
@@ -234,6 +239,7 @@ def login():
     return users_api.login(data['username'], data['password'])
 
 @app.route('/create_user_subject', methods=['POST'])
+@jwt_required()
 def create_user_subject():
     data = request.json
     if not data:
@@ -242,6 +248,7 @@ def create_user_subject():
     return user_subjects_api.create_user_subject(data['user_id'], data['subject_ids'])
 
 @app.route('/get_user_subjects/<user_id>', methods=['GET'])
+@jwt_required()
 def get_user_subjects(user_id):
     subject_ids, response = user_subjects_api.get_user_subjects(user_id)
     subjects = []
@@ -251,6 +258,7 @@ def get_user_subjects(user_id):
     return {'subjects': subjects}, 200
 
 @app.route('/add_topic_progress', methods=['POST'])
+@jwt_required()
 def add_topic_progress():
     data = request.json
     try:
@@ -263,9 +271,10 @@ def add_topic_progress():
     except Exception as e:
             return {'error': str(e)}, 500
         
-@app.route('/get_ordered_list/<user_id>/<subject_id>', methods=['GET'])
-def get_ordered_list(user_id, subject_id):
-    return user_topic_progress_api.get_ordered_list(user_id, subject_id)
+@app.route('/get_priority_list/<user_id>/<subject_id>', methods=['GET'])
+@jwt_required()
+def get_priority_list(user_id, subject_id):
+    return user_topic_progress_api.get_priority_list(user_id, subject_id)
 
 # @app.route('/user_subjects/<int:user_id>', methods=['GET'])
 # def get_user_subjects(user_id):
