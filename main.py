@@ -191,6 +191,19 @@ class UserTopicProgressAPI(API):
         self.db.execute_query(query, params)
         return {'message': 'User topic progress added successfully'}, 201
 
+    def update_topic_progress(self, user_id: str, subject_id: str, topic_id: str,
+                           topic_completed: bool, confidence_level: str,
+                           last_reviewed: str):
+        query = """
+            UPDATE User_Topic_Progress
+            SET TopicCompleted=?, ConfidenceLevel=?, LastReviewed=?
+            WHERE UserID=? AND SubjectID=? AND TopicID=?
+        """
+        params = (topic_completed, confidence_level, last_reviewed, user_id, subject_id, topic_id,)
+        
+        self.db.execute_query(query, params)
+        return jsonify(message='User topic progress added successfully'), 201
+
     def get_priority_list(self, user_id: int, subject_id: int):
         final_result = []
         for confidence_level in ['low', 'medium', 'high']:
@@ -287,6 +300,21 @@ def add_topic_progress():
     except Exception as e:
             return {'error': str(e)}, 500
         
+@app.route('/update_topic_progress', methods=['PUT'])
+@jwt_required()
+def update_topic_progress():
+    data = request.json
+    user_id = users_api.get_user_id(get_jwt_identity())
+    try:
+        for topic in data['topics']:
+            user_topic_progress_api.update_topic_progress(
+                user_id, data['subject_id'], topic['topic_id'],
+                topic['topic_completed'], topic['confidence_level'],
+                topic['last_reviewed'])
+        return {'message': 'Topic progress updateed successfully'}, 201
+    except Exception as e:
+            return {'error': str(e)}, 500
+
 @app.route('/get_priority_list/<subject_id>', methods=['GET'])
 @jwt_required()
 def get_priority_list(subject_id):
