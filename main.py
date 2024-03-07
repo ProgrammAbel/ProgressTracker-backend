@@ -136,6 +136,7 @@ class UserSubjectsAPI(API):
             try:
                 self.db.execute_query(query, (user_id, subject_id))
             except Exception as e:
+                print(str(e))
                 return {'error': str(e)}, 500
         return {'message': 'User_Subject created successfully'}, 201
 
@@ -275,6 +276,7 @@ def create_user_subject():
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     user_id = users_api.get_user_id(get_jwt_identity())
+    print(user_id)
     return user_subjects_api.create_user_subject(user_id, data['subjectIds'])
 
 @app.route('/get_user_subjects', methods=['GET'])
