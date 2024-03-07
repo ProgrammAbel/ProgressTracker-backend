@@ -5,11 +5,14 @@ from pathlib import Path
 from create_database import setup_database
 import secrets
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = secrets.token_hex(32)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 jwt = JWTManager(app)
+CORS(app)
 
 class Database:
     DB_NAME = 'progress_tracker.db'
@@ -21,7 +24,7 @@ class Database:
             setup_database()
 
     def connect(self):
-        self.conn = sqlite3.connect(self.DB_NAME)
+        self.conn = sqlite3.connect(self.DB_NAME, check_same_thread=False)
         self.cursor = self.conn.cursor()
 
     def execute_query(self, query, params=None):
@@ -55,7 +58,7 @@ class SubjectsAPI(API):
     def get_all_subjects(self):
         query = "SELECT * FROM Subjects"
         result = self.db.execute_query(query)
-        return {'subjects': result}, 200
+        return {'data': result}, 200
 
 class TopicsAPI(API):
     def get_name(self, subject_id, topic_id):
@@ -72,7 +75,7 @@ class TopicsAPI(API):
         query = "SELECT TopicID, TopicName FROM Topics WHERE SubjectID=?"
         try:
             result = self.db.execute_query(query, (str(subject_id)))
-            return {'topics': result}, 200
+            return {'data': result}, 200
         except Exception as e:
             return {'error': str(e)}, 500
 
@@ -178,14 +181,14 @@ class UserTopicProgressAPI(API):
                 j += 1
                 k += 1
 
-    def add_topic_progress(self, user_id: str, subject_id: str, topic_id: str,
+    def add_topic_progress(self, user_id: int, subject_id: int, topic_id: int,
                            topic_completed: bool, confidence_level: str,
                            last_reviewed: str):
         query = """
             INSERT INTO User_Topic_Progress
             VALUES (?, ?, ?, ?, ?, ?)
         """
-        params = (user_id, topic_id, subject_id, topic_completed,
+        params = (str(user_id), str(topic_id), str(subject_id), topic_completed,
                   confidence_level, last_reviewed)
         
         self.db.execute_query(query, params)
@@ -272,7 +275,7 @@ def create_user_subject():
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     user_id = users_api.get_user_id(get_jwt_identity())
-    return user_subjects_api.create_user_subject(user_id, data['subject_ids'])
+    return user_subjects_api.create_user_subject(user_id, data['subjectIds'])
 
 @app.route('/get_user_subjects', methods=['GET'])
 @jwt_required()
@@ -293,9 +296,9 @@ def add_topic_progress():
     try:
         for topic in data['topics']:
             user_topic_progress_api.add_topic_progress(
-                user_id, data['subject_id'], topic['topic_id'],
-                topic['topic_completed'], topic['confidence_level'],
-                topic['last_reviewed'])
+                user_id, data['subjectId'], topic['topicId'],
+                topic['topicCompleted'], topic['confidenceLevel'],
+                topic['lastReviewed'])
         return {'message': 'Topic progress added successfully'}, 201
     except Exception as e:
             return {'error': str(e)}, 500
@@ -308,9 +311,9 @@ def update_topic_progress():
     try:
         for topic in data['topics']:
             user_topic_progress_api.update_topic_progress(
-                user_id, data['subject_id'], topic['topic_id'],
-                topic['topic_completed'], topic['confidence_level'],
-                topic['last_reviewed'])
+                user_id, data['subjectId'], topic['topicId'],
+                topic['topicCompleted'], topic['confidenceLevel'],
+                topic['lastReviewed'])
         return {'message': 'Topic progress updateed successfully'}, 201
     except Exception as e:
             return {'error': str(e)}, 500
@@ -325,6 +328,7 @@ def get_priority_list(subject_id):
 @jwt_required()
 def get_ordered_list(subject_id):
     user_id = users_api.get_user_id(get_jwt_identity())
+    print(user_id)
     return user_topic_progress_api.get_ordered_list(user_id, subject_id)
 
 # @app.route('/user_subjects/<int:user_id>', methods=['GET'])
