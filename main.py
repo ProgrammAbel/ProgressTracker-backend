@@ -162,9 +162,21 @@ class UserTopicProgressAPI(API):
             # Merge the sorted halves
             i = j = k = 0
             while i < len(left_half) and j < len(right_half):
-                left_date = datetime.strptime(left_half[i][1], '%Y-%m-%d')
-                right_date = datetime.strptime(right_half[j][1], '%Y-%m-%d')
-                if left_date < right_date:
+                try:
+                    left_date = datetime.strptime(left_half[i][3], '%Y-%m-%d')
+                    right_date = datetime.strptime(right_half[j][3], '%Y-%m-%d')
+                except ValueError:
+                    if left_half[i][3] == '':
+                        left_date = datetime.min
+                    else:
+                        left_date = datetime.strptime(left_half[i][3], '%Y-%m-%d')
+
+                    if right_half[i][3] == '':
+                        right_date = datetime.min
+                    else:
+                        right_date = datetime.strptime(right_half[j][3], '%Y-%m-%d')
+
+                if left_date <= right_date:
                     arr[k] = left_half[i]
                     i += 1
                 else:
@@ -327,13 +339,20 @@ def update_topic_progress():
 @jwt_required()
 def get_priority_list(subject_id):
     user_id = users_api.get_user_id(get_jwt_identity())
-    return user_topic_progress_api.get_priority_list(user_id, subject_id)
+    priority_list = user_topic_progress_api.get_priority_list(user_id, subject_id)
+    final_topic_list = []
+    for item in priority_list[0]['data']:
+        topic_id = item[0]
+        topic = topics_api.get_name(subject_id, topic_id)
+        item_list = list(item)
+        item_list.insert(1, topic[0]['name'])
+        final_topic_list.append(item_list)
+    return {'data': final_topic_list}, 200
 
 @app.route('/get_ordered_list/<subject_id>', methods=['GET'])
 @jwt_required()
 def get_ordered_list(subject_id):
     user_id = users_api.get_user_id(get_jwt_identity())
-    print(user_id)
     ordered_list = user_topic_progress_api.get_ordered_list(user_id, subject_id)
     final_topic_list = []
     for item in ordered_list[0]['data']:
