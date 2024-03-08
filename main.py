@@ -45,7 +45,7 @@ class API:
     def get_name(self, id, query):
         try:
             result = self.db.execute_query(query, (str(id)))
-            return {'name': result[0][0]}, 200
+            return {'data': result[0][0]}, 200
         except Exception as e:
             return {'error': str(e)}, 500
 
@@ -212,7 +212,7 @@ class UserTopicProgressAPI(API):
         final_result = []
         for confidence_level in ['low', 'medium', 'high']:
             query = """
-                SELECT TopicID, LastReviewed, ConfidenceLevel
+                SELECT TopicID, TopicCompleted, ConfidenceLevel, LastReviewed
                 FROM User_Topic_Progress
                 WHERE UserID=? AND SubjectID=? AND ConfidenceLevel=?
             """
@@ -223,7 +223,7 @@ class UserTopicProgressAPI(API):
 
     def get_ordered_list(self, user_id: int, subject_id: int):
         query = """
-            SELECT TopicID, LastReviewed, ConfidenceLevel FROM User_Topic_Progress
+            SELECT TopicID, TopicCompleted, ConfidenceLevel, LastReviewed FROM User_Topic_Progress
             WHERE UserID=? AND SubjectID=?
         """
         result = self.db.execute_query(query, (str(user_id),str(subject_id),))
@@ -285,10 +285,13 @@ def get_user_subjects():
     user_id = users_api.get_user_id(get_jwt_identity())
     subject_ids, response = user_subjects_api.get_user_subjects(user_id)
     subjects = []
-    for i in subject_ids['data']:
-        subjects.append(i[0])
+    try: 
+        for i in subject_ids['data']:
+            subjects.append(i[0])
+    except Exception as e:
+        return {'error': 'User not found'}, 404
     
-    return {'subjects': subjects}, 200
+    return {'data': subjects}, 200
 
 @app.route('/add_topic_progress', methods=['POST'])
 @jwt_required()
@@ -331,7 +334,15 @@ def get_priority_list(subject_id):
 def get_ordered_list(subject_id):
     user_id = users_api.get_user_id(get_jwt_identity())
     print(user_id)
-    return user_topic_progress_api.get_ordered_list(user_id, subject_id)
+    ordered_list = user_topic_progress_api.get_ordered_list(user_id, subject_id)
+    final_topic_list = []
+    for item in ordered_list[0]['data']:
+        topic_id = item[0]
+        topic = topics_api.get_name(subject_id, topic_id)
+        item_list = list(item)
+        item_list.insert(1, topic[0]['name'])
+        final_topic_list.append(item_list)
+    return {'data': final_topic_list}, 200
 
 # @app.route('/user_subjects/<int:user_id>', methods=['GET'])
 # def get_user_subjects(user_id):

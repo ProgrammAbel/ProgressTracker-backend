@@ -56,7 +56,7 @@ def setup_database():
             TopicID INTEGER,
             SubjectID INTEGER,
             TopicCompleted BOOLEAN,
-            ConfidenceLevel INTEGER,
+            ConfidenceLevel TEXT,
             LastReviewed DATE,
             PRIMARY KEY (UserID, TopicID, SubjectID),
             FOREIGN KEY (UserID) REFERENCES Users(UserID),
